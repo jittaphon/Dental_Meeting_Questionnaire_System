@@ -3,7 +3,7 @@ import React from "react";
 import { createBrowserRouter, Navigate } from "react-router-dom";
 
 import MainLayout from "../layouts/MainLayout";
-
+import AdminPage from "./AdminPage";
 import HomePage from "./HomePage";
 import TestSelection from "./TestSelection";
 import Questionnaire from "./Questionnaire";
@@ -44,6 +44,10 @@ export const routes = createBrowserRouter(
           path: "certificate",
           element: <Certificate />,
         },
+        {
+  path: "admin",
+  element: <AdminPage />,
+},
 
         // ไม่พบ Route ให้กลับหน้าแรก
         {

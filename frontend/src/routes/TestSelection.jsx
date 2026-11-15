@@ -12,7 +12,8 @@ import {
   LogOut,
   RefreshCw,
 } from 'lucide-react';
-import { Alert, Button, Skeleton } from 'antd';
+import { Alert, Button, ConfigProvider, Skeleton } from 'antd';
+import { C, ThemeShell, antdCfg } from './DentalTheme'; // ปรับ path ให้ตรงโปรเจกต์
 
 /* ---------- ตั้งค่า (แก้ให้ตรงกับ route / API จริงของโปรเจกต์) ---------- */
 const API_BASE =
@@ -39,6 +40,68 @@ const clearSession = () => {
   sessionStorage.removeItem('participant');
 };
 
+/* ---------- แถบความคืบหน้าแบบแบ่งช่อง (แทนวงแหวน) ---------- */
+const ProgressSteps = ({ steps }) => {
+  const reduceMotion = useReducedMotion();
+  const done = steps.filter((s) => s.done).length;
+  const total = steps.length;
+
+  return (
+    <div className="w-full max-w-xs text-left">
+      <div className="flex items-end justify-between mb-3">
+        <div className="flex items-baseline gap-1">
+          <span className="dm-head text-5xl font-bold leading-none" style={{ color: C.accent }}>
+            {done}
+          </span>
+          <span className="dm-head text-xl font-semibold text-slate-400">/{total}</span>
+        </div>
+        <span className="text-xs text-slate-500 pb-1">ชุดที่ทำแล้ว</span>
+      </div>
+
+      <div className="flex gap-2">
+        {steps.map((s, i) => (
+          <div key={s.label} className="flex-1">
+            <div className="h-2.5 rounded-full bg-cyan-600/10 overflow-hidden">
+              <motion.div
+                className="h-full rounded-full origin-left"
+                style={{
+                  background: `linear-gradient(90deg, ${C.cyan}, ${C.accent})`,
+                  boxShadow: `0 0 10px ${C.cyan}`,
+                }}
+                initial={reduceMotion ? false : { scaleX: 0 }}
+                animate={{ scaleX: s.done ? 1 : 0 }}
+                transition={{
+                  duration: reduceMotion ? 0 : 0.8,
+                  delay: reduceMotion ? 0 : 0.3 + i * 0.25,
+                  ease: [0.22, 1, 0.36, 1],
+                }}
+              />
+            </div>
+            <div
+              className={`mt-2 flex items-center gap-1.5 text-[11px] font-medium ${
+                s.done ? 'text-emerald-700' : 'text-slate-400'
+              }`}
+            >
+              {s.done ? (
+                <CheckCircle2 size={13} className="text-emerald-600" />
+              ) : (
+                <span className="w-[13px] h-[13px] rounded-full border border-slate-300 inline-block" />
+              )}
+              {s.label}
+            </div>
+          </div>
+        ))}
+      </div>
+
+      <p className="mt-4 text-sm text-slate-600">
+        {done === total
+          ? 'ครบทั้ง 2 ชุดแล้ว รับใบประกาศได้เลย'
+          : 'ทำแบบทดสอบให้ครบทั้ง 2 ชุดเพื่อรับใบประกาศ'}
+      </p>
+    </div>
+  );
+};
+
 /* ---------- การ์ดแต่ละรายการ ---------- */
 const STATUS_STYLE = {
   done: {
@@ -47,7 +110,7 @@ const STATUS_STYLE = {
   },
   available: {
     badge: 'bg-cyan-50 text-cyan-700 border-cyan-100',
-    icon: 'bg-cyan-600 text-white shadow-md shadow-cyan-600/30',
+    icon: 'bg-cyan-600 text-white shadow-[0_0_18px_rgba(8,145,178,.45)]',
   },
   locked: {
     badge: 'bg-slate-100 text-slate-500 border-slate-200',
@@ -65,40 +128,27 @@ const ActionCard = ({ icon: Icon, title, desc, status, badge, onClick, delay }) 
       type="button"
       onClick={clickable ? onClick : undefined}
       aria-disabled={!clickable}
-      initial={reduceMotion ? false : { opacity: 0, y: 16 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.4, delay, ease: [0.22, 1, 0.36, 1] }}
+      initial={reduceMotion ? false : { opacity: 0, x: 28 }}
+      animate={{ opacity: 1, x: 0 }}
+      transition={{ duration: 0.5, delay, ease: [0.22, 1, 0.36, 1] }}
+      whileHover={clickable && !reduceMotion ? { x: 4 } : undefined}
       whileTap={clickable && !reduceMotion ? { scale: 0.98 } : undefined}
-      className={`w-full text-left rounded-2xl border p-4 flex items-center gap-4 transition-shadow ${
+      className={`w-full text-left rounded-2xl border p-4 flex items-center gap-4 transition-colors ${
         clickable
-          ? 'bg-white border-cyan-200 shadow-md hover:shadow-lg cursor-pointer'
+          ? 'bg-white border-cyan-200 shadow-[0_6px_24px_rgba(8,145,178,.15)] hover:border-cyan-400 cursor-pointer'
           : 'bg-slate-50 border-slate-200 cursor-not-allowed'
       }`}
     >
-      <span
-        className={`w-12 h-12 rounded-xl flex items-center justify-center shrink-0 ${style.icon}`}
-      >
-        {status === 'done' ? (
-          <CheckCircle2 size={24} />
-        ) : status === 'locked' ? (
-          <Lock size={22} />
-        ) : (
-          <Icon size={24} />
-        )}
+      <span className={`w-12 h-12 rounded-xl flex items-center justify-center shrink-0 ${style.icon}`}>
+        {status === 'done' ? <CheckCircle2 size={24} /> : status === 'locked' ? <Lock size={22} /> : <Icon size={24} />}
       </span>
 
       <span className="flex-1 min-w-0">
         <span className="flex items-center gap-2 flex-wrap mb-0.5">
-          <span
-            className={`font-semibold ${
-              status === 'locked' ? 'text-slate-500' : 'text-slate-800'
-            }`}
-          >
+          <span className={`font-semibold ${status === 'locked' ? 'text-slate-400' : 'text-slate-800'}`}>
             {title}
           </span>
-          <span
-            className={`text-[11px] px-2 py-0.5 rounded-full border font-medium ${style.badge}`}
-          >
+          <span className={`text-[11px] px-2 py-0.5 rounded-full border font-medium ${style.badge}`}>
             {badge}
           </span>
         </span>
@@ -125,8 +175,7 @@ const TestSelection = () => {
       ? {
           pre_completed: !!participant.pre_completed,
           post_completed: !!participant.post_completed,
-          certificate_eligible:
-            !!participant.pre_completed && !!participant.post_completed,
+          certificate_eligible: !!participant.pre_completed && !!participant.post_completed,
         }
       : null
   );
@@ -138,7 +187,6 @@ const TestSelection = () => {
     navigate(ROUTES.home, { replace: true });
   }, [navigate]);
 
-  /* ดึงสถานะล่าสุดจากเซิร์ฟเวอร์ */
   const fetchStatus = useCallback(async () => {
     const token = sessionStorage.getItem('participant_token');
 
@@ -166,7 +214,7 @@ const TestSelection = () => {
       });
     } catch (err) {
       if (err?.response?.status === 401) {
-        logout(); // token หมดอายุหรือไม่ถูกต้อง
+        logout();
         return;
       }
       setError('ไม่สามารถอัปเดตสถานะล่าสุดได้ กรุณาลองใหม่');
@@ -182,169 +230,127 @@ const TestSelection = () => {
   const pre = status?.pre_completed;
   const post = status?.post_completed;
   const eligible = status?.certificate_eligible;
-  const doneCount = (pre ? 1 : 0) + (post ? 1 : 0);
 
   const fade = (delay = 0) =>
     reduceMotion
       ? {}
       : {
-          initial: { opacity: 0, y: 18 },
-          animate: { opacity: 1, y: 0 },
-          transition: { duration: 0.45, delay, ease: [0.22, 1, 0.36, 1] },
+          initial: { opacity: 0, y: 24, filter: 'blur(10px)' },
+          animate: { opacity: 1, y: 0, filter: 'blur(0px)' },
+          transition: { duration: 0.8, delay, ease: [0.22, 1, 0.36, 1] },
         };
 
   return (
-    <div className="min-h-[100dvh] bg-slate-50 flex justify-center">
-      <div className="w-full max-w-md md:max-w-xl lg:max-w-none flex flex-col lg:flex-row min-h-[100dvh] relative">
-
-        {/* ---------- Hero ---------- */}
-        <div className="relative overflow-hidden bg-gradient-to-br from-cyan-600 via-teal-600 to-emerald-600 text-white px-6 pt-[max(2.5rem,env(safe-area-inset-top))] pb-16 rounded-b-[2.5rem] lg:w-[46%] lg:shrink-0 lg:flex lg:items-center lg:px-14 lg:py-16 lg:rounded-b-none lg:rounded-r-[3rem]">
-          <span
-            aria-hidden
-            className="absolute -top-16 -right-16 w-56 h-56 rounded-full bg-white/10"
-          />
-          <span
-            aria-hidden
-            className="absolute -bottom-20 -left-12 w-48 h-48 rounded-full bg-white/10"
-          />
-
-          <motion.div {...fade(0)} className="relative lg:max-w-md w-full">
-            <p className="text-xs font-semibold tracking-[0.25em] text-white/80 mb-3">
+    <ConfigProvider theme={antdCfg}>
+      <ThemeShell>
+        <div className="mx-auto w-full max-w-md md:max-w-xl lg:max-w-5xl min-h-[100dvh] flex flex-col lg:flex-row lg:items-center gap-8 lg:gap-12 px-5 pt-[max(2rem,env(safe-area-inset-top))] pb-[max(2rem,env(safe-area-inset-bottom))]">
+          {/* ---------- Hero ---------- */}
+          <motion.div {...fade(0)} className="lg:w-1/2 flex flex-col items-center lg:items-start text-center lg:text-left">
+            <p className="flex items-center gap-3 text-xs font-semibold tracking-[0.3em] mb-4" style={{ color: C.accent }}>
+              <span className="w-8 h-px" style={{ background: C.accent }} />
               DENTALMEET CERT
             </p>
 
-            <p className="text-sm text-white/80 mb-1">สวัสดี</p>
-            <h1 className="text-[26px] lg:text-4xl leading-tight font-bold mb-2 break-words">
-              {participant
-                ? `${participant.first_name} ${participant.last_name}`
-                : 'ผู้เข้าร่วมประชุม'}
+            <p className="text-sm text-slate-500 mb-1">สวัสดี</p>
+            <h1 className="dm-head text-[28px] lg:text-5xl leading-tight font-bold mb-2 break-words">
+              {participant ? `${participant.first_name} ${participant.last_name}` : 'ผู้เข้าร่วมประชุม'}
             </h1>
             {participant?.hospcode && (
-              <p className="text-sm text-white/80">
-                รหัสสถานบริการ {participant.hospcode}
-              </p>
+              <p className="text-sm text-slate-500">รหัสสถานบริการ {participant.hospcode}</p>
             )}
 
-            {/* ความคืบหน้า */}
-            <div className="mt-6">
-              <div className="flex justify-between text-xs text-white/85 mb-2">
-                <span>ความคืบหน้า</span>
-                <span>ทำแล้ว {doneCount}/2 ชุด</span>
-              </div>
-              <div className="h-2 rounded-full bg-white/20 overflow-hidden">
-                <motion.div
-                  className="h-full rounded-full bg-white"
-                  initial={{ width: 0 }}
-                  animate={{ width: `${(doneCount / 2) * 100}%` }}
-                  transition={{ duration: 0.7, ease: [0.22, 1, 0.36, 1] }}
-                />
-              </div>
+            <div className="mt-8 w-full flex justify-center lg:justify-start">
+              <ProgressSteps
+                steps={[
+                  { label: 'Pre-test', done: !!pre },
+                  { label: 'Post-test', done: !!post },
+                ]}
+              />
             </div>
           </motion.div>
-        </div>
 
-        {/* ---------- รายการ ---------- */}
-        <div className="flex flex-col flex-1 lg:items-center lg:justify-center lg:px-10 lg:py-10">
-          <motion.div
-            {...fade(0.12)}
-            className="relative -mt-8 mx-4 bg-white rounded-3xl shadow-xl shadow-slate-900/5 p-5 pb-6 lg:mt-0 lg:mx-0 lg:w-full lg:max-w-lg lg:p-10 lg:shadow-2xl"
-          >
-            <div className="flex items-start justify-between mb-5">
-              <div>
-                <h2 className="text-lg font-bold text-slate-800">
-                  เลือกแบบทดสอบ
-                </h2>
-                <p className="text-xs text-slate-500 mt-0.5">
-                  ทำ Pre-test ก่อน แล้วจึงทำ Post-test ได้
-                </p>
-              </div>
-              <Button
-                type="text"
-                shape="circle"
-                aria-label="รีเฟรชสถานะ"
-                onClick={fetchStatus}
-                loading={refreshing}
-                icon={<RefreshCw size={16} className="text-slate-400" />}
-              />
-            </div>
-
-            {error && (
-              <Alert
-                type="warning"
-                showIcon
-                closable
-                message={error}
-                onClose={() => setError('')}
-                className="mb-4"
-              />
-            )}
-
-            {!status ? (
-              <Skeleton active paragraph={{ rows: 5 }} />
-            ) : (
-              <div className="flex flex-col gap-3">
-                <ActionCard
-                  icon={ClipboardList}
-                  title="Pre-test"
-                  desc={
-                    pre
-                      ? 'ส่งแบบทดสอบก่อนการประชุมเรียบร้อยแล้ว'
-                      : 'แบบทดสอบก่อนการประชุม'
-                  }
-                  status={pre ? 'done' : 'available'}
-                  badge={pre ? 'ส่งแล้ว' : 'พร้อมทำ'}
-                  onClick={() => navigate(ROUTES.pre)}
-                  delay={0.2}
-                />
-
-                <ActionCard
-                  icon={ClipboardCheck}
-                  title="Post-test"
-                  desc={
-                    !pre
-                      ? 'ต้องทำ Pre-test ให้เสร็จก่อน'
-                      : post
-                      ? 'ส่งแบบทดสอบหลังการประชุมเรียบร้อยแล้ว'
-                      : 'แบบทดสอบหลังการประชุม'
-                  }
-                  status={!pre ? 'locked' : post ? 'done' : 'available'}
-                  badge={!pre ? 'ล็อก' : post ? 'ส่งแล้ว' : 'พร้อมทำ'}
-                  onClick={() => navigate(ROUTES.post)}
-                  delay={0.28}
-                />
-
-                <ActionCard
-                  icon={Award}
-                  title="ใบประกาศนียบัตร"
-                  desc={
-                    eligible
-                      ? 'คุณมีสิทธิ์รับใบประกาศแล้ว'
-                      : 'ทำแบบทดสอบครบทั้ง 2 ชุดเพื่อปลดล็อก'
-                  }
-                  status={eligible ? 'available' : 'locked'}
-                  badge={eligible ? 'รับได้เลย' : 'ล็อก'}
-                  onClick={() => navigate(ROUTES.certificate)}
-                  delay={0.36}
-                />
-              </div>
-            )}
-
-            <button
-              type="button"
-              onClick={logout}
-              className="mt-6 mx-auto flex items-center gap-1.5 text-xs text-slate-400 hover:text-slate-600 transition-colors"
+          {/* ---------- รายการ ---------- */}
+          <div className="lg:w-1/2 flex flex-col items-center">
+            <motion.div
+              {...fade(0.2)}
+              className="dm-border w-full max-w-md rounded-3xl bg-white/85 backdrop-blur-xl p-5 pb-6 lg:p-8 shadow-[0_12px_60px_rgba(8,145,178,.18)]"
             >
-              <LogOut size={14} />
-              ไม่ใช่คุณ? ออกจากระบบ
-            </button>
-          </motion.div>
+              <div className="flex items-start justify-between mb-5">
+                <div>
+                  <h2 className="dm-head text-lg font-bold text-slate-800">เลือกแบบทดสอบ</h2>
+                  <p className="text-xs text-slate-500 mt-0.5">ทำ Pre-test ก่อน แล้วจึงทำ Post-test ได้</p>
+                </div>
+                <Button
+                  type="text"
+                  shape="circle"
+                  aria-label="รีเฟรชสถานะ"
+                  onClick={fetchStatus}
+                  loading={refreshing}
+                  icon={<RefreshCw size={16} className="text-cyan-600/70" />}
+                />
+              </div>
 
-          <p className="text-center text-slate-400 text-xs mt-6 lg:mt-8 pb-[max(1.5rem,env(safe-area-inset-bottom))] lg:pb-0">
-            Dental Conference Questionnaire &amp; Certificate
-          </p>
+              {error && (
+                <Alert type="warning" showIcon closable message={error} onClose={() => setError('')} className="mb-4" />
+              )}
+
+              {!status ? (
+                <Skeleton active paragraph={{ rows: 5 }} />
+              ) : (
+                <div className="flex flex-col gap-3">
+                  <ActionCard
+                    icon={ClipboardList}
+                    title="Pre-test"
+                    desc={pre ? 'ส่งแบบทดสอบก่อนการประชุมเรียบร้อยแล้ว' : 'แบบทดสอบก่อนการประชุม'}
+                    status={pre ? 'done' : 'available'}
+                    badge={pre ? 'ส่งแล้ว' : 'พร้อมทำ'}
+                    onClick={() => navigate(ROUTES.pre)}
+                    delay={0.5}
+                  />
+                  <ActionCard
+                    icon={ClipboardCheck}
+                    title="Post-test"
+                    desc={
+                      !pre
+                        ? 'ต้องทำ Pre-test ให้เสร็จก่อน'
+                        : post
+                        ? 'ส่งแบบทดสอบหลังการประชุมเรียบร้อยแล้ว'
+                        : 'แบบทดสอบหลังการประชุม'
+                    }
+                    status={!pre ? 'locked' : post ? 'done' : 'available'}
+                    badge={!pre ? 'ล็อก' : post ? 'ส่งแล้ว' : 'พร้อมทำ'}
+                    onClick={() => navigate(ROUTES.post)}
+                    delay={0.62}
+                  />
+                  <ActionCard
+                    icon={Award}
+                    title="ใบประกาศนียบัตร"
+                    desc={eligible ? 'คุณมีสิทธิ์รับใบประกาศแล้ว' : 'ทำแบบทดสอบครบทั้ง 2 ชุดเพื่อปลดล็อก'}
+                    status={eligible ? 'available' : 'locked'}
+                    badge={eligible ? 'รับได้เลย' : 'ล็อก'}
+                    onClick={() => navigate(ROUTES.certificate)}
+                    delay={0.74}
+                  />
+                </div>
+              )}
+
+              <button
+                type="button"
+                onClick={logout}
+                className="mt-6 mx-auto flex items-center gap-1.5 text-xs text-slate-400 hover:text-slate-600 transition-colors"
+              >
+                <LogOut size={14} />
+                ไม่ใช่คุณ? ออกจากระบบ
+              </button>
+            </motion.div>
+
+            <p className="text-center text-slate-400 text-xs mt-6">
+              Dental Conference Questionnaire &amp; Certificate
+            </p>
+          </div>
         </div>
-      </div>
-    </div>
+      </ThemeShell>
+    </ConfigProvider>
   );
 };
 

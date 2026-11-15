@@ -10,6 +10,8 @@ import axios from 'axios';
 import { motion, useReducedMotion } from 'framer-motion';
 import { ArrowLeft, Lock, Printer, RefreshCw } from 'lucide-react';
 import { Alert, Button, ConfigProvider, Skeleton } from 'antd';
+import certBg from '../assets/certificate-bg.png'; // ปรับ path ให้ตรงกับที่วางรูป
+import { antdCfg, ThemeShell, glowBtn } from './DentalTheme'; // ปรับ path ให้ตรงโปรเจกต์
 
 /* ---------- ตั้งค่า (แก้ให้ตรงกับงานจริง) ---------- */
 const API_BASE =
@@ -20,18 +22,20 @@ const ROUTES = {
   tests: '/tests',
 };
 
-// ข้อความบนใบประกาศ
-const EVENT_NAME = 'การประชุมวิชาการทันตแพทย์';
-
-// ช่องลงนามท้ายใบประกาศ (แก้ตำแหน่งให้ตรงกับงานจริง หรือเพิ่ม/ลดได้)
-const SIGNATORIES = [
-  { title: 'ประธานการประชุม' },
-  { title: 'ผู้จัดงาน' },
-];
-
-// ขนาดใบประกาศ A4 แนวนอน (px ที่ 96dpi)
+// ขนาดใบประกาศ (px ที่ 96dpi) ค่าเริ่มต้น A4 แนวนอน
+// ถ้ารูปสัดส่วนไม่ใช่ A4 ให้แก้ SHEET_H = Math.round(SHEET_W * สูงรูป / กว้างรูป)
 const SHEET_W = 1123;
 const SHEET_H = 794;
+
+// ตำแหน่งช่องชื่อบนรูป (ปรับให้ตรงกับช่องว่างในรูปของคุณ)
+const NAME_TOP = '41%'; // ระยะจากขอบบน (กึ่งกลางช่องชื่อ)
+const NAME_LEFT = 96; // px ระยะจากขอบซ้าย
+const NAME_RIGHT = 96; // px ระยะจากขอบขวา
+const NAME_BOX_HEIGHT = 100; // ความสูงกล่องชื่อ
+
+// แสดงเลขที่ / วันที่ออก ทับบนรูปหรือไม่
+const SHOW_CERT_NO = true;
+const SHOW_ISSUED_DATE = true;
 
 /* ---------- Helpers ---------- */
 const readCachedParticipant = () => {
@@ -49,13 +53,23 @@ const clearSession = () => {
 
 const formatThaiDate = (value) => {
   if (!value) return '';
-  const d = new Date(String(value).replace(' ', 'T'));
+  const d =
+    value instanceof Date ? value : new Date(String(value).replace(' ', 'T'));
   if (Number.isNaN(d.getTime())) return '';
   return d.toLocaleDateString('th-TH', {
     year: 'numeric',
     month: 'long',
     day: 'numeric',
   });
+};
+
+// ลดขนาดตัวอักษรอัตโนมัติเมื่อชื่อยาว กันล้นกรอบ
+const nameFontSize = (name = '') => {
+  const len = name.length;
+  if (len > 40) return 28;
+  if (len > 30) return 34;
+  if (len > 22) return 42;
+  return 48;
 };
 
 /* ---------- สไตล์สำหรับพิมพ์ / บันทึก PDF ---------- */
@@ -70,107 +84,58 @@ const PRINT_CSS = `
   }
 `;
 
-/* ---------- ไอคอนฟัน ---------- */
-const ToothIcon = ({ className = '' }) => (
-  <svg
-    viewBox="0 0 64 64"
-    fill="none"
-    stroke="currentColor"
-    strokeWidth="3.5"
-    strokeLinecap="round"
-    strokeLinejoin="round"
-    className={className}
-    aria-hidden="true"
-  >
-    <path d="M20 10c-7 0-12 5-12 13 0 6 2 10 4 16 2 6 3 15 7 15 4 0 4-9 6-13 1-3 3-4 5-4s4 1 5 4c2 4 2 13 6 13 4 0 5-9 7-15 2-6 4-10 4-16 0-8-5-13-12-13-4 0-7 2-10 2s-6-2-10-2z" />
-  </svg>
-);
-
-/* ---------- ตัวใบประกาศ (ขนาดคงที่ A4 แนวนอน) ---------- */
-const CertificateSheet = ({ name, hospcode, certNo, issuedDate }) => (
+/* ---------- ตัวใบประกาศ (ใช้รูป PNG เป็นพื้นหลัง + วางชื่อทับ) ---------- */
+const CertificateSheet = ({ name, certNo, issuedDate }) => (
   <div
     style={{ width: SHEET_W, height: SHEET_H }}
-    className="relative bg-white text-slate-800 overflow-hidden"
+    className="relative bg-white overflow-hidden"
   >
-    {/* กรอบ */}
-    <div className="absolute inset-4 border-[6px] border-cyan-600" />
-    <div className="absolute inset-7 border border-cyan-300" />
+    {/* พื้นหลังใบประกาศ */}
+    <img
+      src={certBg}
+      alt=""
+      draggable={false}
+      className="absolute inset-0 w-full h-full select-none"
+      style={{ objectFit: 'fill' }}
+    />
 
-    {/* ลายตกแต่งมุม */}
-    <span className="absolute -top-24 -left-24 w-64 h-64 rounded-full bg-cyan-50" />
-    <span className="absolute -bottom-24 -right-24 w-64 h-64 rounded-full bg-emerald-50" />
-
-    {/* ลายน้ำรูปฟัน */}
-    <ToothIcon className="absolute left-1/2 top-[44%] -translate-x-1/2 -translate-y-1/2 w-[480px] h-[480px] text-cyan-600 opacity-[0.04]" />
-
-    <div className="absolute inset-0 flex flex-col items-center justify-center text-center px-28 pb-24">
-      <ToothIcon className="w-16 h-16 text-cyan-600 mb-3" />
-
-      <p className="text-sm font-semibold tracking-[0.35em] text-cyan-700 mb-2">
-        CERTIFICATE OF PARTICIPATION
-      </p>
-      <h1 className="text-[64px] leading-none font-bold text-slate-800 mb-4">
-        ประกาศนียบัตร
-      </h1>
-
-      {/* เส้นคั่นลายอัญมณี */}
-      <div className="flex items-center gap-3 mb-5" aria-hidden="true">
-        <span className="w-24 h-px bg-gradient-to-r from-transparent to-cyan-500" />
-        <span className="w-2.5 h-2.5 rotate-45 bg-amber-400" />
-        <span className="w-24 h-px bg-gradient-to-l from-transparent to-cyan-500" />
-      </div>
-
-      <p className="text-lg text-slate-500 mb-3">
-        ขอมอบประกาศนียบัตรฉบับนี้ไว้เพื่อแสดงว่า
-      </p>
-
-      <p className="text-5xl font-bold text-cyan-700 border-b-2 border-cyan-600 px-12 pb-3 mb-4 max-w-full break-words">
+    {/* ชื่อ: ปรับ NAME_TOP / NAME_LEFT / NAME_RIGHT ด้านบนให้ตรงช่องว่าง */}
+    <div
+      className="absolute flex items-center justify-center text-center"
+      style={{
+        top: NAME_TOP,
+        left: NAME_LEFT,
+        right: NAME_RIGHT,
+        height: NAME_BOX_HEIGHT,
+        transform: 'translateY(-50%)',
+        // outline: '1px dashed red', // เปิดชั่วคราวเพื่อดูกรอบตอนจูนตำแหน่ง
+      }}
+    >
+      <span
+        className="font-bold text-slate-800 leading-tight whitespace-nowrap"
+        style={{ fontSize: nameFontSize(name) }}
+      >
         {name}
-      </p>
-
-      {hospcode && (
-        <p className="text-lg text-slate-500 mb-3">
-          รหัสสถานบริการ {hospcode}
-        </p>
-      )}
-
-      <p className="text-xl leading-relaxed text-slate-600 max-w-3xl">
-        ได้เข้าร่วมและทำแบบทดสอบ Pre-test และ Post-test ครบถ้วน
-        ใน{EVENT_NAME}
-      </p>
+      </span>
     </div>
 
-    {/* ลายเซ็น + ตราประทับ */}
-    <div className="absolute bottom-[76px] inset-x-24 flex items-end justify-between">
-      {SIGNATORIES.slice(0, 1).map((s) => (
-        <div key={s.title} className="w-60 text-center">
-          <div className="h-10 border-b border-slate-400" />
-          <p className="text-sm font-semibold text-slate-700 mt-2">{s.title}</p>
-        </div>
-      ))}
-
-      {/* ตราประทับ */}
-      <div className="relative w-28 h-28 shrink-0">
-        <div className="absolute inset-0 rounded-full bg-gradient-to-br from-amber-300 to-amber-500 shadow-md" />
-        <div className="absolute inset-2 rounded-full border-2 border-dashed border-amber-100" />
-        <div className="absolute inset-4 rounded-full bg-white flex items-center justify-center">
-          <ToothIcon className="w-9 h-9 text-amber-600" />
-        </div>
-      </div>
-
-      {SIGNATORIES.slice(1, 2).map((s) => (
-        <div key={s.title} className="w-60 text-center">
-          <div className="h-10 border-b border-slate-400" />
-          <p className="text-sm font-semibold text-slate-700 mt-2">{s.title}</p>
-        </div>
-      ))}
-    </div>
-
-    {/* เลขที่ + วันที่ออก */}
-    <div className="absolute bottom-10 inset-x-20 flex justify-between text-sm text-slate-500">
-      <span>{certNo ? `เลขที่ ${certNo}` : ''}</span>
-      <span>{issuedDate ? `ออกให้เมื่อ ${issuedDate}` : ''}</span>
-    </div>
+    {/* เลขที่ + วันที่ออก (ปิดได้ที่ค่าคงที่ด้านบน) */}
+    {SHOW_CERT_NO && certNo && (
+      <span
+        className="absolute text-sm text-slate-600"
+        style={{ left: 84, bottom: 66 }}
+      >
+        เลขที่ {certNo}
+      </span>
+    )}
+    {SHOW_ISSUED_DATE && issuedDate && (
+      <span
+        className="absolute text-sm text-white/90"
+        style={{ right: 80, bottom: 34 }}
+      >
+        ออกให้เมื่อ {issuedDate}
+      </span>
+    )}
   </div>
 );
 
@@ -195,7 +160,7 @@ const CertificatePreview = (props) => {
     <div ref={ref} className="w-full">
       <div
         style={{ height: SHEET_H * scale }}
-        className="relative rounded-xl overflow-hidden shadow-xl ring-1 ring-slate-200 bg-white"
+        className="relative rounded-xl overflow-hidden shadow-[0_0_40px_rgba(8,145,178,.25)] ring-1 ring-cyan-300/50 bg-white"
       >
         <div
           style={{
@@ -219,6 +184,7 @@ const Certificate = () => {
   const reduceMotion = useReducedMotion();
 
   const [participant] = useState(readCachedParticipant);
+  const [today] = useState(() => new Date()); // วันที่ปัจจุบัน ณ ตอนเปิดหน้านี้
   const [cert, setCert] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -266,9 +232,8 @@ const Certificate = () => {
 
   const sheetProps = {
     name: fullName || 'ผู้เข้าร่วมประชุม',
-    hospcode: participant?.hospcode,
     certNo: cert?.certificate_no,
-    issuedDate: formatThaiDate(cert?.certificate_issued_at),
+    issuedDate: formatThaiDate(today),
   };
 
   const fade = reduceMotion
@@ -281,27 +246,25 @@ const Certificate = () => {
 
   return (
     <ConfigProvider
-      theme={{
-        token: { colorPrimary: '#0891b2', borderRadius: 14, fontSize: 16 },
-      }}
+      theme={antdCfg}
     >
       <style>{PRINT_CSS}</style>
 
       {/* ---------- ส่วนที่แสดงบนหน้าจอ ---------- */}
-      <div className="no-print min-h-[100dvh] bg-slate-50">
+      <ThemeShell className="no-print">
         {/* Top bar */}
-        <div className="bg-gradient-to-br from-cyan-600 via-teal-600 to-emerald-600 text-white px-4 pt-[max(1rem,env(safe-area-inset-top))] pb-10 rounded-b-[2rem]">
+        <div className="text-slate-800 px-4 pt-[max(1rem,env(safe-area-inset-top))] pb-10">
           <div className="max-w-4xl mx-auto">
             <button
               type="button"
               onClick={() => navigate(ROUTES.tests)}
-              className="flex items-center gap-1.5 text-sm text-white/85 hover:text-white mb-4"
+              className="flex items-center gap-1.5 text-sm text-slate-500 hover:text-slate-800 mb-4"
             >
               <ArrowLeft size={18} />
               กลับ
             </button>
-            <h1 className="text-2xl font-bold">ใบประกาศนียบัตร</h1>
-            <p className="text-sm text-white/85 mt-1">
+            <h1 className="dm-head text-2xl font-bold">ใบประกาศนียบัตร</h1>
+            <p className="text-sm text-slate-500 mt-1">
               {fullName || 'ผู้เข้าร่วมประชุม'}
             </p>
           </div>
@@ -310,7 +273,7 @@ const Certificate = () => {
         <div className="max-w-4xl mx-auto px-4 -mt-6 pb-[max(2rem,env(safe-area-inset-bottom))]">
           <motion.div
             {...fade}
-            className="bg-white rounded-3xl shadow-xl shadow-slate-900/5 p-4 sm:p-6"
+            className="dm-border rounded-3xl bg-white/85 backdrop-blur-xl shadow-[0_12px_60px_rgba(8,145,178,.18)] p-4 sm:p-6"
           >
             {loading && <Skeleton active paragraph={{ rows: 6 }} />}
 
@@ -338,7 +301,7 @@ const Certificate = () => {
                 <div className="w-16 h-16 mx-auto rounded-2xl bg-slate-100 text-slate-400 flex items-center justify-center mb-4">
                   <Lock size={28} />
                 </div>
-                <h2 className="text-lg font-bold text-slate-800 mb-1">
+                <h2 className="dm-head text-lg font-bold text-slate-800 mb-1">
                   ยังไม่สามารถรับใบประกาศได้
                 </h2>
                 <p className="text-sm text-slate-500 mb-6">
@@ -348,7 +311,7 @@ const Certificate = () => {
                   type="primary"
                   size="large"
                   onClick={() => navigate(ROUTES.tests)}
-                  style={{ borderRadius: 14, fontWeight: 600 }}
+                  style={{ borderRadius: 14, fontWeight: 600, ...glowBtn }}
                 >
                   ไปหน้าเลือกแบบทดสอบ
                 </Button>
@@ -360,7 +323,7 @@ const Certificate = () => {
               <>
                 <CertificatePreview {...sheetProps} />
 
-                <p className="md:hidden text-center text-xs text-slate-400 mt-3">
+                <p className="md:hidden text-center text-xs text-slate-500 mt-3">
                   หมุนจอเป็นแนวนอนเพื่อดูใบประกาศให้ชัดขึ้น
                 </p>
 
@@ -370,7 +333,7 @@ const Certificate = () => {
                     size="large"
                     icon={<Printer size={18} />}
                     onClick={() => window.print()}
-                    style={{ height: 52, borderRadius: 16, fontWeight: 600 }}
+                    style={{ height: 52, borderRadius: 16, fontWeight: 600, ...glowBtn }}
                   >
                     บันทึกเป็น PDF / พิมพ์
                   </Button>
@@ -383,7 +346,7 @@ const Certificate = () => {
                   </Button>
                 </div>
 
-                <p className="text-center text-xs text-slate-400 mt-3">
+                <p className="text-center text-xs text-slate-500 mt-3">
                   ในหน้าต่างพิมพ์ให้เลือกปลายทางเป็น &quot;บันทึกเป็น PDF&quot;
                   (Save as PDF) และเลือกแนวนอน (Landscape)
                   แนะนำให้เปิดหน้านี้ด้วย Chrome หรือ Edge
@@ -392,7 +355,7 @@ const Certificate = () => {
             )}
           </motion.div>
         </div>
-      </div>
+      </ThemeShell>
 
       {/* ---------- ฉบับพิมพ์ (แสดงเฉพาะตอนพิมพ์) ---------- */}
       {cert?.eligible && (

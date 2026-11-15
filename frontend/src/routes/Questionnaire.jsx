@@ -2,8 +2,9 @@ import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import axios from 'axios';
 import { motion, AnimatePresence, useReducedMotion } from 'framer-motion';
-import { ArrowLeft, ArrowRight, Check, RefreshCw, Send } from 'lucide-react';
-import { Alert, Button, ConfigProvider, Skeleton } from 'antd';
+import { ArrowLeft, ArrowRight, Check, RefreshCw, RotateCcw, Send } from 'lucide-react';
+import { Alert, Button, ConfigProvider, Popconfirm, Skeleton } from 'antd';
+import { antdCfg, ThemeShell, glowBtn, SuccessBurst } from './DentalTheme'; // ปรับ path ให้ตรงโปรเจกต์
 
 /* ---------- ตั้งค่า (แก้ให้ตรงกับงานจริง) ---------- */
 const API_BASE =
@@ -21,23 +22,134 @@ const TYPE_INFO = {
 };
 
 /*
- * ชุดคำถาม  ***ตัวอย่างชั่วคราว ต้องเปลี่ยนเป็นคำถามจริง***
- * - id ต้องเป็น '1'–'5' ให้ตรงกับที่ระบบหลังบ้านตรวจ ($validQuestions)
- * - ตัวเลือกต้องเป็น A, B, C, D ($validOptions)
- * - Pre-test และ Post-test ใช้ชุดเดียวกันได้ หรือแยกชุดกันก็ได้
+ * ชุดคำถาม: แบบทดสอบความรู้ SMART Technique และ SDF (11 ข้อ)
+ * - id เป็น '1'–'11' ***ต้องแก้ $validQuestions ในระบบหลังบ้านให้รองรับ 1–11 ด้วย***
+ * - ตัวเลือกเป็น A, B, C, D ($validOptions)
+ * - Pre-test และ Post-test ใช้ชุดเดียวกัน
+ *
+ * เฉลย (สำหรับตั้งค่าตัวตรวจในหลังบ้าน):
+ *   1:B  2:D  3:C  4:A  5:C  6:A  7:C  8:B  9:D  10:A  11:B
  */
-const BASE_QUESTIONS = [
-  1, 2, 3, 4, 5,
-].map((n) => ({
-  id: String(n),
-  text: `(ตัวอย่าง) ใส่คำถามข้อที่ ${n} ตรงนี้`,
-  options: {
-    A: 'ตัวเลือก A',
-    B: 'ตัวเลือก B',
-    C: 'ตัวเลือก C',
-    D: 'ตัวเลือก D',
+const ALL_QUESTIONS = [
+  {
+    id: '1',
+    text: 'ข้อใดอธิบายหลักการสำคัญของ Minimally Invasive Dentistry (MID) ได้ถูกต้องที่สุด',
+    options: {
+      A: 'กำจัดเนื้อฟันผุออกทั้งหมดเพื่อป้องกันการกลับมาเป็นซ้ำ',
+      B: 'เก็บรักษาเนื้อฟันธรรมชาติให้มากที่สุดและเน้นการป้องกันโรค',
+      C: 'เน้นการบูรณะฟันด้วยวัสดุที่มีความแข็งแรงสูงเป็นหลัก',
+      D: 'รักษาเฉพาะรอยโรคที่มีอาการปวดเท่านั้น',
+    },
   },
-}));
+  {
+    id: '2',
+    text: 'ในการวางแผน SMART Technique มีส่วนประกอบสำคัญ 2 ชนิดที่ใช้ร่วมกันในการรักษาฟันผุ ทันตบุคลากรต้องการใช้คุณสมบัติของวัสดุให้สอดคล้องกับเป้าหมายการรักษา ข้อใดอธิบายบทบาทของวัสดุทั้งสองชนิดได้ครบถ้วนที่สุด',
+    options: {
+      A: 'SDF ใช้เพิ่มความแข็งแรงของวัสดุ ส่วน HVGIC ใช้กำจัดแบคทีเรียเพียงอย่างเดียว',
+      B: 'SDF และ HVGIC มีหน้าที่เหมือนกันและใช้ทดแทนกันได้',
+      C: 'SDF ใช้เป็นวัสดุบูรณะหลัก ส่วน HVGIC ใช้ตรวจหารอยโรค',
+      D: 'SDF ช่วยควบคุมเชื้อและการลุกลาม ส่วน HVGIC ใช้บูรณะฟันและช่วยปล่อยฟลูออไรด์',
+    },
+  },
+  {
+    id: '3',
+    text: 'ผู้ป่วยเด็กมีความเสี่ยงต่อโรคฟันผุสูง ตรวจพบรอยโรคในระยะเริ่มต้น และยังไม่มีข้อบ่งชี้ว่าจำเป็นต้องบูรณะฟันทันที ตามหลัก MID ทันตบุคลากรควรวางแผนอย่างไรจึงเหมาะสมที่สุด',
+    options: {
+      A: 'กำจัดเนื้อฟันผุทั้งหมดก่อนประเมินสภาพฟันเพื่อที่จะเลือกวัสดุบูรณะ',
+      B: 'รอจนผู้ป่วยมีอาการปวดจึงเริ่มวางแผนรักษา',
+      C: 'ตรวจหารอยโรคตั้งแต่ระยะเริ่มแรกและประเมินความเสี่ยงแล้ววางแผนป้องกันและส่งเสริมการคืนกลับแร่ธาตุ พร้อมติดตามตามระดับความเสี่ยง',
+      D: 'กำจัดเนื้อฟันและบูรณะทันทีโดยไม่ต้องประเมินความเสี่ยง เนื่องจากเป็นเพียงรอยโรคในระยะเริ่มต้น',
+    },
+  },
+  {
+    id: '4',
+    text: 'ทันตบุคลากรวางแผนดูแลผู้ป่วยฟันผุโดยต้องการให้ครอบคลุมทั้งระดับผู้ป่วย (Patient-level) และระดับรอยโรค (Lesion-level) แผนใดแสดงการประยุกต์ใช้ทั้งสองระดับได้ชัดเจนที่สุด ตามหลักการ Minimally Invasive Dentistry (MID)',
+    options: {
+      A: 'ให้คำแนะนำการลดความถี่อาหารหวาน สุขอนามัยในช่องปาก และจัดการรอยโรคด้วยการบูรณะตามความเหมาะสม',
+      B: 'กำจัดเนื้อฟันผุ และบูรณะรอยโรคหลายตำแหน่ง เพื่อให้รอยโรคหยุดลุกลาม โดยใช้วัสดุบูรณะชนิดปล่อยฟลูออไรด์ได้',
+      C: 'ให้คำแนะนำการใช้ยาสีฟันฟลูออไรด์ที่มีความเข้มข้น 5,000 ppm และนัดติดตามพฤติกรรมการแปรงฟัน',
+      D: 'ให้คำแนะนำการแปรงฟัน และแนะนำให้ผู้ป่วยดื่มน้ำมากขึ้น',
+    },
+  },
+  {
+    id: '5',
+    text: 'ระหว่างกำจัดเนื้อฟันผุในรอยโรคที่มีความลึก ทันตบุคลากรต้องการลดการสูญเสียเนื้อฟันธรรมชาติให้มากที่สุด ข้อใดสะท้อนการตัดสินใจตามหลัก MID ได้เหมาะสมที่สุด',
+    options: {
+      A: 'กำจัดเนื้อฟันผุออกเฉพาะบางส่วน',
+      B: 'กำจัดเนื้อฟันทุกส่วนที่มีสีเปลี่ยนแปลงออกทั้งหมด',
+      C: 'พิจารณาลักษณะ Infected และ Affected dentin ก่อนเลือกขอบเขตการกำจัดฟันผุ',
+      D: 'หลีกเลี่ยงการประเมินเนื้อฟันและเลือกวัสดุบูรณะที่ฆ่าเชื้อฟันผุก่อน',
+    },
+  },
+  {
+    id: '6',
+    text: 'เป้าหมายระยะยาวของ Minimally Invasive Dentistry ที่ให้ความสำคัญคือข้อใด',
+    options: {
+      A: 'ส่งเสริมสุขภาพช่องปากและการทำให้รอยโรคฟันผุหยุดลุกลาม เพื่อลดโอกาสเกิดฟันผุซ้ำ',
+      B: 'เน้นการรักษาเมื่อเกิดความเสียหายรุนแรงเท่านั้น',
+      C: 'มุ่งกำจัดเนื้อฟันผุให้มากที่สุดและส่งเสริมให้เกิดการ Remineralization',
+      D: 'เพิ่มจำนวนครั้งในการบูรณะฟันให้มากที่สุด',
+    },
+  },
+  {
+    id: '7',
+    text: 'ร้อยละความเข้มข้นของซิลเวอร์ไดเอมีนฟลูออไรด์ที่ใช้ในปัจจุบันคือข้อใด',
+    options: {
+      A: 'ร้อยละ 12',
+      B: 'ร้อยละ 20',
+      C: 'ร้อยละ 38',
+      D: 'ร้อยละ 40',
+    },
+  },
+  {
+    id: '8',
+    text: 'ข้อใดไม่ใช่ข้อบ่งใช้ในการใช้ซิลเวอร์ไดเอมีนฟลูออไรด์',
+    options: {
+      A: 'เด็กที่มีความเสี่ยงต่อการเกิดฟันผุในระดับสูง',
+      B: 'ฟันผุลุกลามที่มีอาการปวด',
+      C: 'รอยผุบริเวณที่รักษาได้ยาก เช่น บริเวณขอบของครอบฟัน',
+      D: 'ผู้ป่วยที่ไม่สามารถเข้าถึงบริการทางทันตกรรม',
+    },
+  },
+  {
+    id: '9',
+    text: 'ข้อใดไม่ใช่ปฏิกิริยาการทำงานของซิลเวอร์ไดเอมีนฟลูออไรด์',
+    options: {
+      A: 'ช่วยสร้างผลึกฟลูออโรอาพาไทต์ที่มีความต้านทานความเป็นกรดสูงขึ้น',
+      B: 'แตกตัวให้ซิลเวอร์ไอออนออกฤทธิ์ทำลายผนังเซลล์และยับยั้งการแบ่งตัวของแบคทีเรีย',
+      C: 'ยับยั้งเอนไซม์ MMPs ที่มีฤทธิ์สลายคอลลาเจนในรอยโรคฟันผุ',
+      D: 'ซ่อมแซมรอยโรคฟันผุโดยสร้างเซลล์ชั้นเนื้อฟันและชั้นเคลือบฟันให้เกิดขึ้นใหม่',
+    },
+  },
+  {
+    id: '10',
+    text: 'หากทำซิลเวอร์ไดเอมีนฟลูออไรด์โดนเนื้อเยื่อช่องปากหรือผิวหนังจะเกิดผลอย่างไร',
+    options: {
+      A: 'ติดสีดำที่เหงือก/ผิวหนัง ไม่ทำให้เกิดอาการปวด',
+      B: 'ติดสีดำที่เหงือก/ผิวหนัง ทำให้เกิดอาการปวด',
+      C: 'ติดสีดำที่เหงือก/ผิวหนัง ทำให้เกิดอาการแสบร้อน',
+      D: 'ไม่ติดสีดำที่เหงือก/ผิวหนัง ทำให้เกิดอาการปวด',
+    },
+  },
+  {
+    id: '11',
+    text: 'หากทำซิลเวอร์ไดเอมีนฟลูออไรด์โดนเสื้อผ้าจะเกิดผลอย่างไร',
+    options: {
+      A: 'ติดสีดำที่เสื้อผ้าและซักออก',
+      B: 'ติดสีดำที่เสื้อผ้าและซักไม่ออก',
+      C: 'เสื้อผ้าถูกกัดเป็นสีขาว',
+      D: 'เสื้อผ้าขาดทะลุ',
+    },
+  },
+];
+
+// ข้อที่เปิดใช้งานตอนนี้ (หลังบ้านรองรับ 1–5 ชั่วคราว)
+// พอหลังบ้านรองรับครบ 11 ข้อ ให้เปลี่ยนเป็น ALL_QUESTIONS.map((q) => q.id)
+const ENABLED_QUESTION_IDS = ['1', '2', '3', '4', '5'];
+
+const BASE_QUESTIONS = ALL_QUESTIONS.filter((q) =>
+  ENABLED_QUESTION_IDS.includes(q.id)
+);
 
 const QUESTION_SETS = {
   PRE: BASE_QUESTIONS,
@@ -46,12 +158,69 @@ const QUESTION_SETS = {
 
 const OPTION_KEYS = ['A', 'B', 'C', 'D'];
 
+// สลับลำดับข้อ / ลำดับตัวเลือก ของแต่ละคน (ปิดได้โดยตั้งเป็น false)
+const SHUFFLE_QUESTIONS = true;
+const SHUFFLE_OPTIONS = true;
+
 /* ---------- Helpers ---------- */
 const getToken = () => sessionStorage.getItem('participant_token');
 
 const clearSession = () => {
   sessionStorage.removeItem('participant_token');
   sessionStorage.removeItem('participant');
+  ['PRE', 'POST'].forEach((t) => {
+    sessionStorage.removeItem(`dental_answers_${t}`);
+    sessionStorage.removeItem(`dental_order_${t}`);
+  });
+};
+
+/* ---------- สลับโจทย์ ---------- */
+const shuffle = (arr) => {
+  const a = [...arr];
+  for (let i = a.length - 1; i > 0; i -= 1) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [a[i], a[j]] = [a[j], a[i]];
+  }
+  return a;
+};
+
+const createOrder = (base) => ({
+  q: (SHUFFLE_QUESTIONS ? shuffle(base) : base).map((item) => item.id),
+  o: Object.fromEntries(
+    base.map((item) => [
+      item.id,
+      SHUFFLE_OPTIONS ? shuffle(OPTION_KEYS) : [...OPTION_KEYS],
+    ])
+  ),
+});
+
+// เก็บลำดับไว้ใน sessionStorage เพื่อให้รีเฟรชแล้วลำดับเดิม (คำตอบที่ร่างไว้ไม่เพี้ยน)
+const loadOrCreateOrder = (base, key) => {
+  try {
+    const saved = JSON.parse(sessionStorage.getItem(key) || 'null');
+    const ids = base.map((item) => item.id);
+    const valid =
+      saved &&
+      Array.isArray(saved.q) &&
+      saved.q.length === ids.length &&
+      ids.every((id) => saved.q.includes(id)) &&
+      ids.every(
+        (id) =>
+          Array.isArray(saved.o?.[id]) &&
+          saved.o[id].length === OPTION_KEYS.length &&
+          OPTION_KEYS.every((k) => saved.o[id].includes(k))
+      );
+    if (valid) return saved;
+  } catch {
+    /* สร้างใหม่ */
+  }
+  const fresh = createOrder(base);
+  try {
+    sessionStorage.setItem(key, JSON.stringify(fresh));
+  } catch {
+    /* ไม่เป็นไร */
+  }
+  return fresh;
 };
 
 const markCompletedInCache = (type) => {
@@ -77,40 +246,10 @@ const getSubmitError = (error) => {
 
 /* ---------- หน้าจอสำเร็จ ---------- */
 const SuccessOverlay = ({ type }) => (
-  <motion.div
-    initial={{ opacity: 0 }}
-    animate={{ opacity: 1 }}
-    exit={{ opacity: 0 }}
-    transition={{ duration: 0.25 }}
-    className="fixed inset-0 z-50 flex flex-col items-center justify-center bg-gradient-to-br from-cyan-600 via-teal-600 to-emerald-600 text-white px-6 text-center"
-    role="status"
-    aria-live="polite"
-  >
-    <motion.div
-      initial={{ scale: 0.4, opacity: 0 }}
-      animate={{ scale: 1, opacity: 1 }}
-      transition={{ type: 'spring', stiffness: 260, damping: 18 }}
-      className="w-24 h-24 rounded-full bg-white/20 flex items-center justify-center mb-6 ring-8 ring-white/10"
-    >
-      <Check size={48} strokeWidth={3} />
-    </motion.div>
-    <motion.p
-      initial={{ y: 12, opacity: 0 }}
-      animate={{ y: 0, opacity: 1 }}
-      transition={{ delay: 0.15 }}
-      className="text-2xl font-bold mb-1"
-    >
-      ส่ง {TYPE_INFO[type].title} สำเร็จ
-    </motion.p>
-    <motion.p
-      initial={{ y: 12, opacity: 0 }}
-      animate={{ y: 0, opacity: 1 }}
-      transition={{ delay: 0.25 }}
-      className="text-white/85"
-    >
-      {type === 'PRE' ? 'กำลังกลับไปหน้าเลือกแบบทดสอบ' : 'กำลังไปหน้าใบประกาศนียบัตร'}
-    </motion.p>
-  </motion.div>
+  <SuccessBurst
+    title={`ส่ง ${TYPE_INFO[type].title} สำเร็จ`}
+    subtitle={type === 'PRE' ? 'กำลังกลับไปหน้าเลือกแบบทดสอบ' : 'กำลังไปหน้าใบประกาศนียบัตร'}
+  />
 );
 
 /* ---------- ตัวหน้าทำแบบทดสอบ ---------- */
@@ -118,13 +257,23 @@ const QuestionnaireInner = ({ type }) => {
   const navigate = useNavigate();
   const reduceMotion = useReducedMotion();
 
-  const questions = QUESTION_SETS[type];
-  const total = questions.length;
+  const baseQuestions = QUESTION_SETS[type];
   const draftKey = `dental_answers_${type}`;
+  const orderKey = `dental_order_${type}`;
 
+  // ลำดับข้อ/ตัวเลือกของแต่ละคน (สุ่มครั้งเดียวต่อการทำแบบทดสอบ)
+  const [order] = useState(() => loadOrCreateOrder(baseQuestions, orderKey));
+  const questions = order.q.map((id) => baseQuestions.find((x) => x.id === id));
+  const total = questions.length;
+
+  // โหลดร่างคำตอบ โดยตัดคำตอบของข้อที่ปิดใช้งานอยู่ออก (กันค้างจากตอนที่ยังมี 11 ข้อ)
   const [answers, setAnswers] = useState(() => {
     try {
-      return JSON.parse(sessionStorage.getItem(draftKey) || '{}') || {};
+      const saved = JSON.parse(sessionStorage.getItem(draftKey) || '{}') || {};
+      const ids = baseQuestions.map((x) => x.id);
+      return Object.fromEntries(
+        Object.entries(saved).filter(([id]) => ids.includes(id))
+      );
     } catch {
       return {};
     }
@@ -226,7 +375,23 @@ const QuestionnaireInner = ({ type }) => {
     }
   };
 
+  /* รีเซ็ตคำตอบทั้งหมด (ลำดับข้อ/ตัวเลือกที่สุ่มไว้คงเดิม) */
+  const handleReset = () => {
+    if (submitting) return;
+    clearTimeout(timerRef.current);
+    setAnswers({});
+    setError('');
+    setDir(-1);
+    setCurrent(0);
+    try {
+      sessionStorage.removeItem(draftKey);
+    } catch {
+      /* ไม่เป็นไร */
+    }
+  };
+
   const answeredCount = questions.filter((q) => answers[q.id]).length;
+  const percent = Math.round((answeredCount / total) * 100);
 
   const handleSubmit = async () => {
     const firstMissing = questions.findIndex((q) => !answers[q.id]);
@@ -261,6 +426,7 @@ const QuestionnaireInner = ({ type }) => {
       if (!res?.data?.success) throw new Error('Submit failed');
 
       sessionStorage.removeItem(draftKey);
+      sessionStorage.removeItem(orderKey);
       markCompletedInCache(type);
       setDone(true);
 
@@ -268,7 +434,7 @@ const QuestionnaireInner = ({ type }) => {
         navigate(type === 'PRE' ? ROUTES.tests : ROUTES.certificate, {
           replace: true,
         });
-      }, 1400);
+      }, 2000);
     } catch (err) {
       if (err?.response?.status === 401) {
         logout();
@@ -293,46 +459,61 @@ const QuestionnaireInner = ({ type }) => {
 
   return (
     <ConfigProvider
-      theme={{
-        token: { colorPrimary: '#0891b2', borderRadius: 14, fontSize: 16 },
-      }}
+      theme={antdCfg}
     >
-      <div className="min-h-[100dvh] bg-slate-50">
+      <ThemeShell>
         {/* ---------- Header ---------- */}
-        <div className="bg-gradient-to-br from-cyan-600 via-teal-600 to-emerald-600 text-white px-4 pt-[max(1rem,env(safe-area-inset-top))] pb-14 rounded-b-[2rem]">
+        <div className="text-slate-800 px-4 pt-[max(1rem,env(safe-area-inset-top))] pb-14">
           <div className="max-w-2xl mx-auto">
             <button
               type="button"
               onClick={() => navigate(ROUTES.tests)}
               disabled={submitting || done}
-              className="flex items-center gap-1.5 text-sm text-white/85 hover:text-white mb-4 disabled:opacity-50"
+              className="flex items-center gap-1.5 text-sm text-slate-500 hover:text-slate-800 mb-4 disabled:opacity-50"
             >
               <ArrowLeft size={18} />
               กลับ
             </button>
 
-            <p className="text-xs font-semibold tracking-[0.25em] text-white/80 mb-1">
+            <p className="text-xs font-semibold tracking-[0.25em] text-[#059669] mb-1">
               DENTALMEET CERT
             </p>
-            <h1 className="text-2xl font-bold">{TYPE_INFO[type].title}</h1>
-            <p className="text-sm text-white/85">{TYPE_INFO[type].subtitle}</p>
+            <h1 className="dm-head text-2xl font-bold">{TYPE_INFO[type].title}</h1>
+            <p className="text-sm text-slate-500">{TYPE_INFO[type].subtitle}</p>
 
             <div className="mt-4">
-              <div className="flex justify-between text-xs text-white/85 mb-1.5">
+              <div className="flex justify-between text-xs text-slate-500 mb-1.5">
                 <span>
                   ข้อ {current + 1} / {total}
                 </span>
                 <span>
-                  ตอบแล้ว {answeredCount}/{total}
+                  ตอบแล้ว {answeredCount}/{total} · {percent}%
                 </span>
               </div>
-              <div className="h-2 rounded-full bg-white/20 overflow-hidden">
+
+              {/* แถบความคืบหน้า: ไหลช้า ๆ ตามจำนวนข้อที่ตอบ จนเต็มเมื่อครบ */}
+              <div className="relative h-2.5 rounded-full bg-slate-200 overflow-hidden">
                 <motion.div
-                  className="h-full rounded-full bg-white"
+                  className="relative h-full rounded-full overflow-hidden bg-gradient-to-r from-cyan-500 to-emerald-500 shadow-[0_0_12px_rgba(16,185,129,.5)]"
                   initial={false}
-                  animate={{ width: `${(answeredCount / total) * 100}%` }}
-                  transition={{ duration: 0.4, ease: [0.22, 1, 0.36, 1] }}
-                />
+                  animate={{ width: `${percent}%` }}
+                  transition={
+                    reduceMotion
+                      ? { duration: 0 }
+                      : { type: 'spring', stiffness: 40, damping: 18, mass: 1.2 }
+                  }
+                >
+                  {/* แสงวิ่งผ่านแถบ ให้ดูเหมือนกำลังไหล */}
+                  {!reduceMotion && percent > 0 && (
+                    <motion.span
+                      aria-hidden="true"
+                      className="absolute inset-y-0 w-1/2 bg-gradient-to-r from-transparent via-white/60 to-transparent"
+                      initial={{ x: '-100%' }}
+                      animate={{ x: '300%' }}
+                      transition={{ duration: 1.6, repeat: Infinity, ease: 'linear' }}
+                    />
+                  )}
+                </motion.div>
               </div>
             </div>
           </div>
@@ -340,7 +521,7 @@ const QuestionnaireInner = ({ type }) => {
 
         {/* ---------- เนื้อหา ---------- */}
         <div className="max-w-2xl mx-auto px-4 -mt-8 pb-[max(2rem,env(safe-area-inset-bottom))]">
-          <div className="bg-white rounded-3xl shadow-xl shadow-slate-900/5 p-5 sm:p-8">
+          <div className="dm-border rounded-3xl bg-white/85 backdrop-blur-xl shadow-[0_12px_60px_rgba(8,145,178,.18)] p-5 sm:p-8">
             {checking && !loadError && <Skeleton active paragraph={{ rows: 6 }} />}
 
             {loadError && (
@@ -377,7 +558,7 @@ const QuestionnaireInner = ({ type }) => {
                         aria-current={active ? 'step' : undefined}
                         className={`w-9 h-9 rounded-full text-sm font-semibold transition-colors ${
                           active
-                            ? 'bg-cyan-600 text-white shadow-md shadow-cyan-600/30'
+                            ? 'bg-emerald-500 text-white shadow-[0_0_14px_rgba(16,185,129,.55)]'
                             : answered
                             ? 'bg-cyan-100 text-cyan-700'
                             : 'bg-slate-100 text-slate-400'
@@ -401,7 +582,7 @@ const QuestionnaireInner = ({ type }) => {
                       exit="exit"
                       transition={{ duration: 0.22, ease: 'easeOut' }}
                     >
-                      <p className="text-xs font-semibold text-cyan-700 mb-1">
+                      <p className="text-xs font-semibold text-cyan-600 mb-1">
                         ข้อที่ {current + 1}
                       </p>
                       <h2 className="text-lg font-bold text-slate-800 leading-snug mb-5">
@@ -413,7 +594,7 @@ const QuestionnaireInner = ({ type }) => {
                         aria-label={`ตัวเลือกข้อที่ ${current + 1}`}
                         className="flex flex-col gap-3"
                       >
-                        {OPTION_KEYS.map((key) => {
+                        {(order.o[q.id] || OPTION_KEYS).map((key, pos) => {
                           const checked = selected === key;
                           return (
                             <button
@@ -425,7 +606,7 @@ const QuestionnaireInner = ({ type }) => {
                               onClick={() => selectAnswer(key)}
                               className={`w-full text-left flex items-center gap-3 rounded-2xl border-2 p-3.5 transition-all active:scale-[0.98] ${
                                 checked
-                                  ? 'border-cyan-500 bg-cyan-50 shadow-sm'
+                                  ? 'border-cyan-500 bg-cyan-50 shadow-[0_0_20px_rgba(8,145,178,.2)]'
                                   : 'border-slate-200 bg-white hover:border-cyan-300'
                               }`}
                             >
@@ -436,11 +617,15 @@ const QuestionnaireInner = ({ type }) => {
                                     : 'bg-slate-100 text-slate-500'
                                 }`}
                               >
-                                {checked ? <Check size={18} strokeWidth={3} /> : key}
+                                {checked ? (
+                                  <Check size={18} strokeWidth={3} />
+                                ) : (
+                                  OPTION_KEYS[pos]
+                                )}
                               </span>
                               <span
                                 className={`flex-1 text-[15px] leading-snug ${
-                                  checked ? 'text-slate-900 font-medium' : 'text-slate-700'
+                                  checked ? 'text-slate-900 font-medium' : 'text-slate-600'
                                 }`}
                               >
                                 {q.options[key]}
@@ -486,7 +671,7 @@ const QuestionnaireInner = ({ type }) => {
                       icon={<Send size={18} />}
                       iconPosition="end"
                       onClick={handleSubmit}
-                      style={{ height: 52, borderRadius: 16, fontWeight: 600 }}
+                      style={{ height: 52, borderRadius: 16, fontWeight: 600, ...(selected ? glowBtn : {}) }}
                     >
                       ส่งคำตอบ
                     </Button>
@@ -499,21 +684,43 @@ const QuestionnaireInner = ({ type }) => {
                       icon={<ArrowRight size={18} />}
                       iconPosition="end"
                       onClick={() => goTo(current + 1)}
-                      style={{ height: 52, borderRadius: 16, fontWeight: 600 }}
+                      style={{ height: 52, borderRadius: 16, fontWeight: 600, ...(selected ? glowBtn : {}) }}
                     >
                       ถัดไป
                     </Button>
                   )}
                 </div>
 
-                <p className="text-center text-xs text-slate-400 mt-4">
+                {/* ปุ่มรีเซ็ตคำตอบ */}
+                <div className="mt-3 flex justify-center">
+                  <Popconfirm
+                    title="ล้างคำตอบทั้งหมด?"
+                    description="คำตอบที่เลือกไว้ทุกข้อจะถูกลบ"
+                    okText="ล้างคำตอบ"
+                    cancelText="ยกเลิก"
+                    okButtonProps={{ danger: true }}
+                    onConfirm={handleReset}
+                    disabled={answeredCount === 0 || submitting}
+                  >
+                    <Button
+                      type="text"
+                      icon={<RotateCcw size={16} />}
+                      disabled={answeredCount === 0 || submitting}
+                      className="text-slate-500"
+                    >
+                      รีเซ็ตคำตอบ
+                    </Button>
+                  </Popconfirm>
+                </div>
+
+                <p className="text-center text-xs text-slate-500 mt-4">
                   เมื่อส่งแล้วจะไม่สามารถแก้ไขหรือส่งซ้ำได้
                 </p>
               </>
             )}
           </div>
         </div>
-      </div>
+      </ThemeShell>
 
       <AnimatePresence>{done && <SuccessOverlay type={type} />}</AnimatePresence>
     </ConfigProvider>

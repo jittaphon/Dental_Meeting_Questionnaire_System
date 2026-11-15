@@ -1,6 +1,6 @@
 import { Outlet, useLocation } from "react-router-dom";
 
-import Footer from "../components/Footer";
+
 import React from "react";
 
 export default function MainLayout() {
@@ -17,7 +17,7 @@ export default function MainLayout() {
         </main>
       </div>
 
-      <Footer />
+     
     </div>
   );
 }
