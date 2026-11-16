@@ -145,7 +145,7 @@ const ALL_QUESTIONS = [
 
 // ข้อที่เปิดใช้งานตอนนี้ (หลังบ้านรองรับ 1–5 ชั่วคราว)
 // พอหลังบ้านรองรับครบ 11 ข้อ ให้เปลี่ยนเป็น ALL_QUESTIONS.map((q) => q.id)
-const ENABLED_QUESTION_IDS = ['1', '2', '3', '4', '5'];
+const ENABLED_QUESTION_IDS = ALL_QUESTIONS.map((q) => q.id);
 
 const BASE_QUESTIONS = ALL_QUESTIONS.filter((q) =>
   ENABLED_QUESTION_IDS.includes(q.id)
