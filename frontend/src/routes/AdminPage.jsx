@@ -19,16 +19,33 @@ import { Alert, Button, ConfigProvider, Input, Segmented, Skeleton, Tag } from '
 import { antdCfg, ThemeShell } from './DentalTheme'; // ปรับ path ให้ตรงโปรเจกต์
 
 /* ---------- ตั้งค่า ---------- */
-// ตอนนี้ยังไม่มี endpoint จริง ใช้ข้อมูลตัวอย่างก่อน แล้วเปลี่ยนเป็น false เมื่อหลังบ้านพร้อม
-const USE_MOCK = true;
+// true = ใช้ข้อมูลตัวอย่าง, false = ดึงข้อมูลจริงจากหลังบ้าน
+const USE_MOCK = false;
 
 const API_BASE =
   'https://pyodatahub.moph.go.th/datahub/pyo-kpi/backend/public/index.php/api/dental';
-const RESULTS_URL = `${API_BASE}/admin/results`;
+const RESULTS_URL = `${API_BASE}/answers`;
 
 // ⚠ รหัสผ่านฝั่งหน้าเว็บ ใครเปิด DevTools ก็เห็นได้ ควรตรวจรหัสที่หลังบ้านด้วยเมื่อใช้งานจริง
 const ADMIN_PASSWORD = '00043';
 const AUTH_KEY = 'dental_admin_ok';
+
+// สร้าง header สำหรับยืนยันตัวตน: ส่งรหัสแอดมินทั้งแบบ header เฉพาะและแบบ Bearer
+const authHeaders = (password) => {
+  const headers = {
+    Accept: 'application/json',
+    'X-Admin-Password': password,
+    Authorization: `Bearer ${password}`,
+  };
+  try {
+    // ถ้ามี token ผู้เข้าร่วมค้างอยู่ใน session ให้ใช้แทน Bearer
+    const token = sessionStorage.getItem('participant_token');
+    if (token) headers.Authorization = `Bearer ${token}`;
+  } catch {
+    /* ไม่เป็นไร */
+  }
+  return headers;
+};
 
 const OPTION_KEYS = ['A', 'B', 'C', 'D'];
 
@@ -48,7 +65,7 @@ const QUESTIONS = [
 ];
 const TOTAL = QUESTIONS.length;
 
-/* ---------- ข้อมูลตัวอย่าง (สุ่มแบบคงที่ ให้เห็นภาพก่อน) ---------- */
+/* ---------- ข้อมูลตัวอย่าง (สุ่มแบบคงที่ ใช้เมื่อ USE_MOCK = true) ---------- */
 const buildMock = () => {
   let seed = 7;
   const rnd = () => {
@@ -107,15 +124,57 @@ const toMap = (raw) => {
   return null;
 };
 
+const pickTest = (v) => {
+  const s = String(v ?? '').toLowerCase();
+  if (s.includes('post')) return 'post';
+  if (s.includes('pre')) return 'pre';
+  return null;
+};
+
 // ปรับฟังก์ชันนี้ให้ตรงกับรูปแบบที่ API ส่งมาจริง
-const normalize = (list) =>
-  (Array.isArray(list) ? list : []).map((p) => ({
-    id: p.id,
-    name: `${p.first_name ?? ''} ${p.last_name ?? ''}`.trim(),
-    hospcode: p.hospcode ?? '-',
-    pre: toMap(p.pre_answers ?? p.pre),
-    post: toMap(p.post_answers ?? p.post),
-  }));
+// รองรับ 2 รูปแบบ: 1 แถวต่อคน (มี pre_answers/post_answers) และ 1 แถวต่อ 1 คำตอบ
+const normalize = (list) => {
+  const arr = Array.isArray(list) ? list : [];
+
+  // รูปแบบ A: 1 แถวต่อคน มี pre_answers / post_answers
+  const isPerPerson =
+    arr.length > 0 &&
+    arr.some((p) => 'pre_answers' in p || 'post_answers' in p || 'pre' in p || 'post' in p);
+
+  if (isPerPerson) {
+    return arr.map((p) => ({
+      id: p.id,
+      name: `${p.first_name ?? ''} ${p.last_name ?? ''}`.trim(),
+      hospcode: p.hospcode ?? '-',
+      pre: toMap(p.pre_answers ?? p.pre),
+      post: toMap(p.post_answers ?? p.post),
+    }));
+  }
+
+  // รูปแบบ B: 1 แถวต่อ 1 คำตอบ (participant_id, test_type, question_id, answer)
+  const byUser = new Map();
+  arr.forEach((a) => {
+    const uid = a.participant_id ?? a.user_id ?? a.participant?.id;
+    if (uid == null) return;
+    if (!byUser.has(uid)) {
+      const src = a.participant ?? a;
+      byUser.set(uid, {
+        id: uid,
+        name: `${src.first_name ?? ''} ${src.last_name ?? ''}`.trim(),
+        hospcode: src.hospcode ?? '-',
+        pre: null,
+        post: null,
+      });
+    }
+    const row = byUser.get(uid);
+    const t = pickTest(a.test_type ?? a.type ?? a.test ?? a.test_set);
+    const qid = a.question_id ?? a.question_no ?? a.question;
+    const ans = a.answer ?? a.selected ?? a.choice;
+    if (!t || qid == null || ans == null) return;
+    row[t] = { ...(row[t] || {}), [String(qid)]: String(ans).toUpperCase() };
+  });
+  return [...byUser.values()];
+};
 
 const scoreOf = (map) =>
   map ? QUESTIONS.reduce((s, q) => s + (map[q.id] === q.key ? 1 : 0), 0) : null;
@@ -444,17 +503,25 @@ const Dashboard = ({ password, onLogout }) => {
         setRows(normalize(buildMock()));
       } else {
         const res = await axios.get(RESULTS_URL, {
-          headers: { 'X-Admin-Password': password, Accept: 'application/json' },
+          headers: authHeaders(password),
           timeout: 20000,
         });
-        setRows(normalize(res?.data?.data));
+        const body = res?.data;
+        if (body?.success === false) throw new Error(body?.message || 'Request failed');
+        setRows(normalize(body?.data ?? body));
       }
     } catch (err) {
-      setError(
-        err?.response
-          ? 'โหลดข้อมูลไม่สำเร็จ กรุณาลองใหม่อีกครั้ง'
-          : 'ไม่สามารถเชื่อมต่อเซิร์ฟเวอร์ได้'
-      );
+      const status = err?.response?.status;
+      const serverMsg = err?.response?.data?.message || err?.message;
+      if (status === 401 || status === 403) {
+        setError(`หลังบ้านไม่อนุญาตให้เข้าถึง (${serverMsg}) กรุณาตรวจสอบสิทธิ์ของ endpoint /answers`);
+      } else if (err?.response) {
+        setError(`โหลดข้อมูลไม่สำเร็จ: ${serverMsg}`);
+      } else if (err?.message && !err?.request) {
+        setError(`โหลดข้อมูลไม่สำเร็จ: ${serverMsg}`);
+      } else {
+        setError('ไม่สามารถเชื่อมต่อเซิร์ฟเวอร์ได้ (ตรวจสอบเน็ตหรือ CORS)');
+      }
     } finally {
       setLoading(false);
     }

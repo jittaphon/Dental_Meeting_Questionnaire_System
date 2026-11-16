@@ -11,6 +11,7 @@ import { motion, useReducedMotion } from 'framer-motion';
 import { ArrowLeft, Lock, Printer, RefreshCw } from 'lucide-react';
 import { Alert, Button, ConfigProvider, Skeleton } from 'antd';
 import certBg from '../assets/certificate-bg.png'; // ปรับ path ให้ตรงกับที่วางรูป
+import signImg from '../assets/sign.png'; // ลายเซ็นนายแพทย์
 import { antdCfg, ThemeShell, glowBtn } from './DentalTheme'; // ปรับ path ให้ตรงโปรเจกต์
 
 /* ---------- ตั้งค่า (แก้ให้ตรงกับงานจริง) ---------- */
@@ -27,15 +28,21 @@ const ROUTES = {
 const SHEET_W = 1123;
 const SHEET_H = 794;
 
-// ตำแหน่งช่องชื่อบนรูป (ปรับให้ตรงกับช่องว่างในรูปของคุณ)
-const NAME_TOP = '41%'; // ระยะจากขอบบน (กึ่งกลางช่องชื่อ)
-const NAME_LEFT = 96; // px ระยะจากขอบซ้าย
-const NAME_RIGHT = 96; // px ระยะจากขอบขวา
+// ตำแหน่งช่องชื่อบนรูป (ช่องว่างระหว่าง "ขอมอบเกียรติบัตรฉบับนี้เพื่อแสดงว่า" กับ "ได้เข้าร่วมการอบรม...")
+const NAME_TOP = '40%'; // ระยะจากขอบบน (กึ่งกลางช่องชื่อ)
+const NAME_LEFT = 150; // px ระยะจากขอบซ้าย
+const NAME_RIGHT = 150; // px ระยะจากขอบขวา
 const NAME_BOX_HEIGHT = 100; // ความสูงกล่องชื่อ
 
-// แสดงเลขที่ / วันที่ออก ทับบนรูปหรือไม่
-const SHOW_CERT_NO = true;
-const SHOW_ISSUED_DATE = true;
+// ตำแหน่งลายเซ็นนายแพทย์ (กึ่งกลางเหนือเส้นลงนาม)
+const SHOW_SIGN = true;
+const SIGN_CENTER_X = 548; // px จากขอบซ้าย (กึ่งกลางลายเซ็น)
+const SIGN_LINE_Y = 620; // px จากขอบบน (ขอบล่างของลายเซ็น = เหนือเส้นเล็กน้อย)
+const SIGN_WIDTH = 150; // px ความกว้างลายเซ็น
+
+// แสดงเลขที่ / วันที่ออก ทับบนรูปหรือไม่ (ในรูปมีวันที่พิมพ์ติดอยู่แล้ว จึงปิดไว้)
+const SHOW_CERT_NO = false;
+const SHOW_ISSUED_DATE = false;
 
 /* ---------- Helpers ---------- */
 const readCachedParticipant = () => {
@@ -84,7 +91,7 @@ const PRINT_CSS = `
   }
 `;
 
-/* ---------- ตัวใบประกาศ (ใช้รูป PNG เป็นพื้นหลัง + วางชื่อทับ) ---------- */
+/* ---------- ตัวใบประกาศ (ใช้รูป PNG เป็นพื้นหลัง + วางชื่อและลายเซ็นทับ) ---------- */
 const CertificateSheet = ({ name, certNo, issuedDate }) => (
   <div
     style={{ width: SHEET_W, height: SHEET_H }}
@@ -118,6 +125,25 @@ const CertificateSheet = ({ name, certNo, issuedDate }) => (
         {name}
       </span>
     </div>
+
+    {/* ลายเซ็นนายแพทย์ */}
+    {SHOW_SIGN && (
+      <img
+        src={signImg}
+        alt="ลายเซ็น"
+        draggable={false}
+        className="absolute select-none pointer-events-none"
+        style={{
+          left: SIGN_CENTER_X,
+          top: SIGN_LINE_Y,
+          width: SIGN_WIDTH,
+          height: 'auto',
+          transform: 'translate(-50%, -100%)', // กึ่งกลางแนวนอน และให้ขอบล่างอยู่ที่ SIGN_LINE_Y
+          mixBlendMode: 'multiply', // ทำให้พื้นขาวของรูปกลืนไปกับพื้นหลังใบประกาศ
+          // outline: '1px dashed red', // เปิดชั่วคราวเพื่อดูกรอบตอนจูนตำแหน่ง
+        }}
+      />
+    )}
 
     {/* เลขที่ + วันที่ออก (ปิดได้ที่ค่าคงที่ด้านบน) */}
     {SHOW_CERT_NO && certNo && (
@@ -245,9 +271,7 @@ const Certificate = () => {
       };
 
   return (
-    <ConfigProvider
-      theme={antdCfg}
-    >
+    <ConfigProvider theme={antdCfg}>
       <style>{PRINT_CSS}</style>
 
       {/* ---------- ส่วนที่แสดงบนหน้าจอ ---------- */}
