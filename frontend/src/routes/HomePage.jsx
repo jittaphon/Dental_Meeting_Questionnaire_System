@@ -12,7 +12,7 @@ import {
 import {
   Form,
   Input,
-  Select,
+  AutoComplete,
   Button,
   Alert,
   ConfigProvider,
@@ -25,6 +25,11 @@ const VERIFY_URL =
 
 const HOSPITALS_URL =
   'https://pyodatahub.moph.go.th/datahub/pyo-kpi/backend/public/index.php/api/dental/hospitals';
+
+// สถานบริการที่มีคำเหล่านี้จะไม่แสดงในรายการ (แต่ผู้ใช้ยังพิมพ์ชื่อเองได้)
+const HIDDEN_KEYWORDS = ['ทดสอบ', 'test'];
+const isHiddenHospital = (name) =>
+  HIDDEN_KEYWORDS.some((k) => String(name).toLowerCase().includes(k.toLowerCase()));
 
 const STEPS = [
   { icon: ShieldCheck, label: 'ยืนยันตัวตน' },
@@ -227,13 +232,17 @@ const HomePage = () => {
 
   useEffect(() => () => clearTimeout(timerRef.current), []);
 
-  /* ---------- โหลดรายชื่อสถานบริการจาก API ---------- */
+  /* ---------- โหลดรายชื่อสถานบริการจาก API (ซ่อนชื่อที่เป็นข้อมูลทดสอบ) ---------- */
   const loadHospitals = async (signal) => {
     setLoadingHospitals(true);
     try {
       const res = await axios.get(HOSPITALS_URL, { timeout: 15000, signal });
       const list = Array.isArray(res?.data?.data) ? res.data.data : [];
-      setHospitals(list.map((name) => ({ value: name, label: name })));
+      setHospitals(
+        list
+          .filter((name) => !isHiddenHospital(name))
+          .map((name) => ({ value: name, label: name }))
+      );
     } catch (error) {
       if (axios.isCancel(error)) return;
       console.error('Load hospitals error:', error);
@@ -414,23 +423,27 @@ const HomePage = () => {
                   />
                 </Form.Item>
 
+                {/* เลือกจากรายการ หรือพิมพ์เองก็ได้ (รายการไม่แสดงชื่อที่เป็นข้อมูลทดสอบ) */}
                 <Form.Item
                   label="สถานบริการ"
                   name="hospcode"
-                  rules={[{ required: true, message: 'กรุณาเลือกสถานบริการ' }]}
+                  rules={[{ required: true, whitespace: true, message: 'กรุณาเลือกหรือพิมพ์ชื่อสถานบริการ' }]}
                 >
-                  <Select
-                    showSearch
+                  <AutoComplete
                     allowClear
-                    placeholder="เลือกหรือพิมพ์ค้นหาสถานบริการ"
                     options={hospitals}
-                    loading={loadingHospitals}
-                    optionFilterProp="label"
-                    suffixIcon={<Building2 size={18} className="text-cyan-600/70" />}
+                    filterOption={(input, option) =>
+                      String(option?.label ?? '').toLowerCase().includes(input.trim().toLowerCase())
+                    }
                     notFoundContent={loadingHospitals ? 'กำลังโหลด...' : 'ไม่พบสถานบริการ'}
-                    virtual
                     listHeight={256}
-                  />
+                  >
+                    <Input
+                      prefix={<Building2 size={18} className="text-cyan-600/70 mr-1" />}
+                      placeholder="เลือกหรือพิมพ์ชื่อสถานบริการ"
+                      maxLength={255}
+                    />
+                  </AutoComplete>
                 </Form.Item>
 
                 <div className="flex gap-3 items-start rounded-2xl bg-cyan-50 border border-cyan-100 p-3.5 mb-5 mt-1">

@@ -15,7 +15,7 @@ import {
   Check,
   X,
 } from 'lucide-react';
-import { Alert, Button, ConfigProvider, Input, Segmented, Skeleton, Tag } from 'antd';
+import { Alert, Button, ConfigProvider, Input, Segmented, Skeleton, Switch, Tag } from 'antd';
 import { antdCfg, ThemeShell } from './DentalTheme'; // ปรับ path ให้ตรงโปรเจกต์
 
 /* ---------- ตั้งค่า ---------- */
@@ -30,22 +30,16 @@ const RESULTS_URL = `${API_BASE}/answers`;
 const ADMIN_PASSWORD = '00043';
 const AUTH_KEY = 'dental_admin_ok';
 
-// สร้าง header สำหรับยืนยันตัวตน: ส่งรหัสแอดมินทั้งแบบ header เฉพาะและแบบ Bearer
-const authHeaders = (password) => {
-  const headers = {
-    Accept: 'application/json',
-    'X-Admin-Password': password,
-    Authorization: `Bearer ${password}`,
-  };
-  try {
-    // ถ้ามี token ผู้เข้าร่วมค้างอยู่ใน session ให้ใช้แทน Bearer
-    const token = sessionStorage.getItem('participant_token');
-    if (token) headers.Authorization = `Bearer ${token}`;
-  } catch {
-    /* ไม่เป็นไร */
-  }
-  return headers;
-};
+// header สำหรับยืนยันตัวตน (Authorization อยู่ใน Access-Control-Allow-Headers ของหลังบ้านแล้ว)
+const authHeaders = (password) => ({
+  Accept: 'application/json',
+  Authorization: `Bearer ${password}`,
+});
+
+// คำที่ใช้ระบุว่าเป็นข้อมูลทดสอบ (ตรวจจากชื่อ-นามสกุล และชื่อสถานบริการ) เพิ่ม/ลบคำได้
+const TEST_KEYWORDS = ['ทดสอบ', 'test'];
+// ถ้ามี id ที่อยากระบุตรง ๆ ใส่ที่นี่ เช่น [1, 2]
+const TEST_IDS = [];
 
 const OPTION_KEYS = ['A', 'B', 'C', 'D'];
 
@@ -131,7 +125,6 @@ const pickTest = (v) => {
   return null;
 };
 
-// ปรับฟังก์ชันนี้ให้ตรงกับรูปแบบที่ API ส่งมาจริง
 // รองรับ 2 รูปแบบ: 1 แถวต่อคน (มี pre_answers/post_answers) และ 1 แถวต่อ 1 คำตอบ
 const normalize = (list) => {
   const arr = Array.isArray(list) ? list : [];
@@ -174,6 +167,13 @@ const normalize = (list) => {
     row[t] = { ...(row[t] || {}), [String(qid)]: String(ans).toUpperCase() };
   });
   return [...byUser.values()];
+};
+
+// เป็นข้อมูลทดสอบหรือไม่
+const isTestRow = (r) => {
+  if (TEST_IDS.includes(r.id)) return true;
+  const text = `${r.name} ${r.hospcode}`.toLowerCase();
+  return TEST_KEYWORDS.some((k) => text.includes(k.toLowerCase()));
 };
 
 const scoreOf = (map) =>
@@ -486,7 +486,8 @@ const Gate = ({ onPass }) => {
 
 /* ---------- แดชบอร์ด ---------- */
 const Dashboard = ({ password, onLogout }) => {
-  const [rows, setRows] = useState([]);
+  const [allRows, setAllRows] = useState([]);
+  const [showTest, setShowTest] = useState(false); // ค่าเริ่มต้น: ซ่อนข้อมูลทดสอบ
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [mode, setMode] = useState('POST'); // PRE | POST | COMPARE
@@ -500,7 +501,7 @@ const Dashboard = ({ password, onLogout }) => {
     try {
       if (USE_MOCK) {
         await new Promise((r) => setTimeout(r, 400));
-        setRows(normalize(buildMock()));
+        setAllRows(normalize(buildMock()));
       } else {
         const res = await axios.get(RESULTS_URL, {
           headers: authHeaders(password),
@@ -508,7 +509,7 @@ const Dashboard = ({ password, onLogout }) => {
         });
         const body = res?.data;
         if (body?.success === false) throw new Error(body?.message || 'Request failed');
-        setRows(normalize(body?.data ?? body));
+        setAllRows(normalize(body?.data ?? body));
       }
     } catch (err) {
       const status = err?.response?.status;
@@ -530,6 +531,13 @@ const Dashboard = ({ password, onLogout }) => {
   useEffect(() => {
     load();
   }, [load]);
+
+  // กรองข้อมูลทดสอบออก (ถ้าสวิตช์ปิดอยู่)
+  const testCount = useMemo(() => allRows.filter(isTestRow).length, [allRows]);
+  const rows = useMemo(
+    () => (showTest ? allRows : allRows.filter((r) => !isTestRow(r))),
+    [allRows, showTest]
+  );
 
   const summary = useMemo(() => {
     const preDone = rows.filter((r) => r.pre);
@@ -597,6 +605,17 @@ const Dashboard = ({ password, onLogout }) => {
               </Tag>
             )}
           </p>
+          <div className="flex items-center gap-2 mt-2">
+            <Switch size="small" checked={showTest} onChange={setShowTest} />
+            <span className="text-xs text-slate-500">
+              แสดงข้อมูลทดสอบ
+              {testCount > 0 && (
+                <span className="text-slate-400">
+                  {' '}({showTest ? `รวม ${testCount} รายการ` : `ซ่อนอยู่ ${testCount} รายการ`})
+                </span>
+              )}
+            </span>
+          </div>
         </div>
         <div className="flex gap-2 shrink-0">
           <Button icon={<RefreshCw size={16} />} onClick={load} loading={loading}>
@@ -804,7 +823,14 @@ const Dashboard = ({ password, onLogout }) => {
                           {r.name.charAt(0)}
                         </span>
                         <span className="flex-1 min-w-0">
-                          <span className="block text-sm font-semibold text-slate-800 truncate">{r.name}</span>
+                          <span className="block text-sm font-semibold text-slate-800 truncate">
+                            {r.name}
+                            {showTest && isTestRow(r) && (
+                              <Tag color="orange" className="!ml-2 !text-[10px]">
+                                ทดสอบ
+                              </Tag>
+                            )}
+                          </span>
                           <span className="block text-xs text-slate-400 truncate" title={r.hospcode}>
                             {r.hospcode}
                           </span>
