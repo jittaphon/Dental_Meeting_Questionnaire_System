@@ -143,8 +143,7 @@ const ALL_QUESTIONS = [
   },
 ];
 
-// ข้อที่เปิดใช้งานตอนนี้ (หลังบ้านรองรับ 1–5 ชั่วคราว)
-// พอหลังบ้านรองรับครบ 11 ข้อ ให้เปลี่ยนเป็น ALL_QUESTIONS.map((q) => q.id)
+// ข้อที่เปิดใช้งานตอนนี้ (หลังบ้านต้องรองรับครบ 11 ข้อ)
 const ENABLED_QUESTION_IDS = ALL_QUESTIONS.map((q) => q.id);
 
 const BASE_QUESTIONS = ALL_QUESTIONS.filter((q) =>
@@ -158,9 +157,9 @@ const QUESTION_SETS = {
 
 const OPTION_KEYS = ['A', 'B', 'C', 'D'];
 
-// สลับลำดับข้อ / ลำดับตัวเลือก ของแต่ละคน (ปิดได้โดยตั้งเป็น false)
-const SHUFFLE_QUESTIONS = true;
-const SHUFFLE_OPTIONS = true;
+// สลับลำดับข้อ / ลำดับตัวเลือก ของแต่ละคน
+const SHUFFLE_QUESTIONS = true; // สลับโจทย์
+const SHUFFLE_OPTIONS = false; // ไม่สลับตัวเลือก (A, B, C, D เรียงตามเดิม)
 
 /* ---------- Helpers ---------- */
 const getToken = () => sessionStorage.getItem('participant_token');
@@ -208,7 +207,9 @@ const loadOrCreateOrder = (base, key) => {
         (id) =>
           Array.isArray(saved.o?.[id]) &&
           saved.o[id].length === OPTION_KEYS.length &&
-          OPTION_KEYS.every((k) => saved.o[id].includes(k))
+          OPTION_KEYS.every((k) => saved.o[id].includes(k)) &&
+          // ถ้าไม่สลับตัวเลือก ลำดับที่เก็บไว้ต้องเป็น A,B,C,D เท่านั้น
+          (SHUFFLE_OPTIONS || saved.o[id].every((k, i) => k === OPTION_KEYS[i]))
       );
     if (valid) return saved;
   } catch {
@@ -266,7 +267,7 @@ const QuestionnaireInner = ({ type }) => {
   const questions = order.q.map((id) => baseQuestions.find((x) => x.id === id));
   const total = questions.length;
 
-  // โหลดร่างคำตอบ โดยตัดคำตอบของข้อที่ปิดใช้งานอยู่ออก (กันค้างจากตอนที่ยังมี 11 ข้อ)
+  // โหลดร่างคำตอบ โดยตัดคำตอบของข้อที่ปิดใช้งานอยู่ออก
   const [answers, setAnswers] = useState(() => {
     try {
       const saved = JSON.parse(sessionStorage.getItem(draftKey) || '{}') || {};
@@ -375,7 +376,7 @@ const QuestionnaireInner = ({ type }) => {
     }
   };
 
-  /* รีเซ็ตคำตอบทั้งหมด (ลำดับข้อ/ตัวเลือกที่สุ่มไว้คงเดิม) */
+  /* รีเซ็ตคำตอบทั้งหมด (ลำดับข้อที่สุ่มไว้คงเดิม) */
   const handleReset = () => {
     if (submitting) return;
     clearTimeout(timerRef.current);
@@ -458,9 +459,7 @@ const QuestionnaireInner = ({ type }) => {
       };
 
   return (
-    <ConfigProvider
-      theme={antdCfg}
-    >
+    <ConfigProvider theme={antdCfg}>
       <ThemeShell>
         {/* ---------- Header ---------- */}
         <div className="text-slate-800 px-4 pt-[max(1rem,env(safe-area-inset-top))] pb-14">
