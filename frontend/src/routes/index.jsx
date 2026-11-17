@@ -44,10 +44,11 @@ export const routes = createBrowserRouter(
           path: "certificate",
           element: <Certificate />,
         },
-        {
+          {
   path: "admin",
   element: <AdminPage />,
 },
+  
 
         // ไม่พบ Route ให้กลับหน้าแรก
         {
