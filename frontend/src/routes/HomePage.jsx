@@ -12,6 +12,7 @@ import {
 import {
   Form,
   Input,
+  Select,
   Button,
   Alert,
   ConfigProvider,
@@ -22,6 +23,8 @@ import { C, ThemeShell, SuccessBurst, antdCfg } from './DentalTheme'; // ปร�
 const VERIFY_URL =
   'https://pyodatahub.moph.go.th/datahub/pyo-kpi/backend/public/index.php/api/dental/verify';
 
+const HOSPITALS_URL =
+  'https://pyodatahub.moph.go.th/datahub/pyo-kpi/backend/public/index.php/api/dental/hospitals';
 
 const STEPS = [
   { icon: ShieldCheck, label: 'ยืนยันตัวตน' },
@@ -201,7 +204,7 @@ const getErrorMessage = (error) => {
   const apiMessage = error?.response?.data?.message;
 
   if (!error?.response) return 'ไม่สามารถเชื่อมต่อเซิร์ฟเวอร์ได้ กรุณาตรวจสอบอินเทอร์เน็ตแล้วลองใหม่';
-  if (status === 404) return 'ไม่พบข้อมูลผู้ลงทะเบียน กรุณาตรวจสอบชื่อ นามสกุล และหน่วยงานให้ตรงกับที่ลงทะเบียนไว้';
+  if (status === 404) return 'ไม่พบข้อมูลผู้ลงทะเบียน กรุณาตรวจสอบชื่อ นามสกุล และสถานบริการให้ตรงกับที่ลงทะเบียนไว้';
   if (status === 409) return 'พบข้อมูลซ้ำในระบบ กรุณาติดต่อผู้จัดงาน';
   return apiMessage || 'เกิดข้อผิดพลาด กรุณาลองใหม่อีกครั้ง';
 };
@@ -217,9 +220,34 @@ const HomePage = () => {
   const [submitError, setSubmitError] = useState('');
   const [verifiedName, setVerifiedName] = useState('');
 
+  const [hospitals, setHospitals] = useState([]);
+  const [loadingHospitals, setLoadingHospitals] = useState(true);
+
   const timerRef = useRef(null);
 
   useEffect(() => () => clearTimeout(timerRef.current), []);
+
+  /* ---------- โหลดรายชื่อสถานบริการจาก API ---------- */
+  const loadHospitals = async (signal) => {
+    setLoadingHospitals(true);
+    try {
+      const res = await axios.get(HOSPITALS_URL, { timeout: 15000, signal });
+      const list = Array.isArray(res?.data?.data) ? res.data.data : [];
+      setHospitals(list.map((name) => ({ value: name, label: name })));
+    } catch (error) {
+      if (axios.isCancel(error)) return;
+      console.error('Load hospitals error:', error);
+      setSubmitError('โหลดรายชื่อสถานบริการไม่สำเร็จ กรุณารีเฟรชหน้าแล้วลองใหม่');
+    } finally {
+      setLoadingHospitals(false);
+    }
+  };
+
+  useEffect(() => {
+    const controller = new AbortController();
+    loadHospitals(controller.signal);
+    return () => controller.abort();
+  }, []);
 
   const handleSubmit = async (values) => {
     setSubmitting(true);
@@ -387,17 +415,21 @@ const HomePage = () => {
                 </Form.Item>
 
                 <Form.Item
-                  label="รหัสสถานบริการ"
+                  label="สถานบริการ"
                   name="hospcode"
-                  rules={[{ required: true, whitespace: true, message: 'กรุณากรอกรหัสสถานบริการ' }]}
+                  rules={[{ required: true, message: 'กรุณาเลือกสถานบริการ' }]}
                 >
-                  <Input
-                    prefix={<Building2 size={18} className="text-cyan-600/70 mr-1" />}
-                    placeholder="เช่น 10001"
-                    maxLength={20}
-                    inputMode="numeric"
-                    autoComplete="off"
-                    enterKeyHint="done"
+                  <Select
+                    showSearch
+                    allowClear
+                    placeholder="เลือกหรือพิมพ์ค้นหาสถานบริการ"
+                    options={hospitals}
+                    loading={loadingHospitals}
+                    optionFilterProp="label"
+                    suffixIcon={<Building2 size={18} className="text-cyan-600/70" />}
+                    notFoundContent={loadingHospitals ? 'กำลังโหลด...' : 'ไม่พบสถานบริการ'}
+                    virtual
+                    listHeight={256}
                   />
                 </Form.Item>
 

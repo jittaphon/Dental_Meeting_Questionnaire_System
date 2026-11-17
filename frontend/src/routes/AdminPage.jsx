@@ -95,7 +95,7 @@ const buildMock = () => {
     id: i + 1,
     first_name,
     last_name,
-    hospcode: String(10001 + i * 7),
+    hospcode: `รพ.สต.ตัวอย่าง ${i + 1}`,
     pre_answers: i % 9 === 8 ? null : answer(-0.1), // บางคนยังไม่ทำ Pre
     post_answers: i % 6 === 5 ? null : answer(0.15), // บางคนยังไม่ทำ Post
   }));
@@ -572,7 +572,10 @@ const Dashboard = ({ password, onLogout }) => {
       if (filter === 'DONE' && !(r.pre && r.post)) return false;
       if (filter === 'PENDING' && r.pre && r.post) return false;
       if (!s) return true;
-      return r.name.toLowerCase().includes(s) || String(r.hospcode).includes(s);
+      return (
+        r.name.toLowerCase().includes(s) ||
+        String(r.hospcode).toLowerCase().includes(s)
+      );
     });
   }, [rows, search, filter]);
 
@@ -757,7 +760,7 @@ const Dashboard = ({ password, onLogout }) => {
               <Input
                 allowClear
                 prefix={<Search size={16} className="text-slate-400" />}
-                placeholder="ค้นหาชื่อหรือรหัสสถานบริการ"
+                placeholder="ค้นหาชื่อหรือสถานบริการ"
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
               />
@@ -802,7 +805,9 @@ const Dashboard = ({ password, onLogout }) => {
                         </span>
                         <span className="flex-1 min-w-0">
                           <span className="block text-sm font-semibold text-slate-800 truncate">{r.name}</span>
-                          <span className="block text-xs text-slate-400">รหัส {r.hospcode}</span>
+                          <span className="block text-xs text-slate-400 truncate" title={r.hospcode}>
+                            {r.hospcode}
+                          </span>
                           <span className="flex flex-wrap items-center gap-1.5 mt-1.5">
                             <ScoreBadge label="Pre" score={preScore} />
                             <ScoreBadge label="Post" score={postScore} />
